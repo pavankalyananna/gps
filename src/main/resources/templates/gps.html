@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPS Tracking System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root {
+            --mobile-padding: 10px;
+        }
+        
+        body {
+            background-color: #f8f9fa;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+        
+        @media (max-width: 768px) {
+            body {
+                padding: var(--mobile-padding);
+            }
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: white;
+            padding: 30px 0;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        @media (max-width: 768px) {
+            .header {
+                padding: 15px 0;
+                margin-bottom: 20px;
+            }
+            
+            .header h1 {
+                font-size: 1.5rem;
+            }
+            
+            .header .lead {
+                font-size: 1rem;
+            }
+        }
+        
+        .tracking-card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+            margin-bottom: 30px;
+            padding: 25px;
+        }
+        
+        @media (max-width: 768px) {
+            .tracking-card {
+                padding: 35px;
+                margin-bottom: 20px;
+            }
+        }
+        
+        .refresh-badge {
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+        
+        .refresh-badge:hover {
+            transform: rotate(90deg);
+        }
+        
+        .timestamp {
+            font-size: 0.85rem;
+            color: #6c757d;
+        }
+        
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        @media (max-width: 768px) {
+            .table-container {
+                max-height: 300px;
+            }
+        }
+        
+        .table thead th {
+            position: sticky;
+            top: 0;
+            background-color: #f8f9fa;
+            z-index: 10;
+        }
+        
+        .map-container {
+            height: 400px;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            z-index: 1;
+        }
+        
+        @media (max-width: 768px) {
+            .map-container {
+                height: 300px;
+            }
+        }
+        
+        .tracking-tabs {
+            margin-bottom: 20px;
+        }
+        
+        .tab-content {
+            border: 1px solid #dee2e6;
+            border-top: none;
+            border-radius: 0 0 0.25rem 0.25rem;
+            padding: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .tab-content {
+                padding: 15px;
+            }
+        }
+        
+        .nav-tabs .nav-link {
+            font-weight: 600;
+        }
+        
+        .nav-tabs .nav-link.active {
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: white;
+            border-color: transparent;
+        }
+        
+        .route-info {
+            background-color: #e8f4f8;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .route-info {
+                padding: 10px;
+            }
+        }
+        
+        .info-badge {
+            font-size: 0.9rem;
+            padding: 5px 10px;
+            border-radius: 20px;
+            margin-right: 10px;
+            margin-bottom: 5px;
+        }
+        
+        @media (max-width: 768px) {
+            .info-badge {
+                font-size: 0.8rem;
+                padding: 4px 8px;
+                margin-right: 5px;
+                margin-bottom: 5px;
+            }
+        }
+        
+        .live-pulse {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #dc3545;
+            box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+            animation: pulse 1.5s infinite;
+            margin-right: 5px;
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+        }
+        
+        .geo-warning {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 10px 15px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+        }
+        
+        .tracking-controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        
+        .map-marker {
+            background-color: #4a6cfa;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 0 0 5px rgba(74, 108, 250, 0.3);
+        }
+        
+        .leaflet-popup-content {
+            min-width: 200px;
+        }
+        
+        /* Mobile-specific adjustments */
+        .mobile-stack {
+            flex-direction: column;
+        }
+        
+        .mobile-mt-15 {
+            margin-top: 15px;
+        }
+        
+        .mobile-text-center {
+            text-align: center !important;
+        }
+        
+        .mobile-full-width {
+            width: 100%;
+        }
+        
+        @media (max-width: 768px) {
+            .mobile-stack {
+                flex-direction: column;
+            }
+            
+            .mobile-mt-15 {
+                margin-top: 15px;
+            }
+            
+            .mobile-text-center {
+                text-align: center !important;
+            }
+            
+            .mobile-full-width {
+                width: 100%;
+            }
+            
+            .mobile-padding-10 {
+                padding: 10px !important;
+            }
+            
+            .mobile-btn-block {
+                display: block;
+                width: 100%;
+                margin-bottom: 10px;
+            }
+            
+            .mobile-font-sm {
+                font-size: 0.9rem;
+            }
+        }
+        .invisible {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header text-center invisible">
+            <h1><i class="fas fa-map-marker-alt me-2"></i>GPS Tracking System</h1>
+            <p class="lead">Real-time location tracking with live routing</p>
+        </div>
+
+        <div class="tracking-card">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h3 class="mobile-text-center"><i class="fas fa-search me-2"></i>Track Device</h3>
+                    <form th:action="@{/track}" method="get" class="row g-3">
+                        <div class="col-md-8">
+                            <input type="text" name="deviceId" class="form-control" 
+                                   th:value="${deviceId ?: ''}"
+                                   placeholder="Enter Device ID (e.g. GPS-001)" 
+                                   aria-label="Device ID" required>
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-primary w-100 mobile-btn-block">
+                                <i class="fas fa-search me-1"></i> Track
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                
+                <div class="col-md-4 text-end mobile-text-center mobile-mt-15 invisible">
+                    <h3 th:if="${deviceId}" class="mobile-text-center">
+                        Device: <span class="badge bg-primary" th:text="${deviceId}"></span>
+                        <span id="refreshIndicator" class="refresh-badge ms-2">
+                            <span class="badge bg-success">
+                                <i class="fas fa-sync"></i> Auto-Refresh: <span id="countdown">30</span>s
+                            </span>
+                        </span>
+                    </h3>
+                    <p class="timestamp" th:if="${deviceId}">Last updated: <span id="lastUpdated">Never</span></p>
+                </div>
+            </div>
+        </div>
+
+        <div th:if="${deviceId}">
+            <!-- Tab Navigation -->
+            <ul class="nav nav-tabs tracking-tabs flex-nowrap overflow-auto" id="trackingTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="history-tab" data-bs-toggle="tab" 
+                            data-bs-target="#history" type="button" role="tab">
+                        <i class="fas fa-history me-1"></i> History View
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="live-tab" data-bs-toggle="tab" 
+                            data-bs-target="#live" type="button" role="tab">
+                        <span class="live-pulse"></span>
+                        <i class="fas fa-satellite me-1"></i> Live Tracking
+                    </button>
+                </li>
+            </ul>
+            
+            <!-- Tab Content -->
+            <div class="tab-content" id="trackingTabContent">
+                <!-- History View Tab -->
+                <div class="tab-pane fade show active" id="history" role="tabpanel">
+                    <div class="row mobile-stack">
+                        <div class="col-md-15">
+                            <div class="tracking-card">
+                                <h4><i class="fas fa-map me-2"></i>Location Map</h4>
+                                <div class="mb-3">
+                                    <label for="datePicker" class="form-label"><i class="fas fa-calendar me-2"></i>Select Date</label>
+                                    <input type="date" id="datePicker" class="form-control">
+                                </div>
+                                <div id="mapContainer" class="map-container"></div>
+                                <div class="map-info">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    Showing <span id="todayCount">0</span> location points for <span id="selectedDateLabel">today</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mobile-mt-15 invisible">
+                            <div class="tracking-card">
+                                <h4><i class="fas fa-history me-2"></i>Location History</h4>
+                                <div class="table-container">
+                                    <table class="table table-hover">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Timestamp</th>
+                                                <th>Latitude</th>
+                                                <th>Longitude</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="locationData">
+                                            <!-- Data will be populated by JavaScript -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Live Tracking Tab -->
+                <div class="tab-pane fade" id="live" role="tabpanel">
+                    <div class="geo-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Live tracking requires access to your device location. Please allow location permissions when prompted.
+                    </div>
+                    
+                    <div class="route-info">
+                        <h5><i class="fas fa-route me-2"></i>Route Information</h5>
+                        <div class="d-flex flex-wrap">
+                            <span class="info-badge bg-primary">
+                                <i class="fas fa-user me-1"></i> Your Location: 
+                                <span id="sourceCoords">Not available</span>
+                            </span>
+                            <span class="info-badge bg-success">
+                                <i class="fas fa-car me-1"></i> Device Location: 
+                                <span id="destCoords">Loading...</span>
+                            </span>
+                            <span class="info-badge bg-info">
+                                <i class="fas fa-ruler-combined me-1"></i> Distance: 
+                                <span id="routeDistance">-- km</span>
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="map-container" id="liveMapContainer"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="tracking-controls flex-wrap">
+                        <button id="startLiveTrack" class="btn btn-success mobile-btn-block">
+                            <i class="fas fa-play me-1"></i> Start Live Tracking
+                        </button>
+                        <button id="stopLiveTrack" class="btn btn-danger mobile-btn-block" disabled>
+                            <i class="fas fa-stop me-1"></i> Stop Tracking
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+     <script>
+            // Global variables
+            let deviceId = "[[${deviceId}]]";
+            let map = null;
+            let liveMap = null;
+            let routingControl = null;
+            let liveTrackingInterval = null;
+            let sourceMarker = null;
+            let destinationMarker = null;
+            let userLocation = null;
+            let deviceLocation = null;
+            let refreshInterval = null;
+            let countdownInterval = null;
+            let countdown = 30;
+            let historyMarkers = [];
+            let historyPolyline = null;
+
+            // Initialize on page load
+            document.addEventListener('DOMContentLoaded', () => {
+                if (deviceId) {
+                    initMap();
+                    initLiveMap();
+                    // Initialize the date picker and set to today
+                    const datePicker = document.getElementById('datePicker');
+                    if (datePicker) {
+                        const today = new Date().toISOString().split('T')[0];
+                        datePicker.value = today;
+                        
+                        datePicker.addEventListener('change', function() {
+                            const selectedDate = this.value;
+                            updateMapWithDateLocations(selectedDate);
+                        });
+                    }
+                    // Load initial data for today
+                    updateMapWithDateLocations();
+                    startAutoRefresh();
+                    
+                    // Setup tab change listener
+                    document.getElementById('live-tab').addEventListener('shown.bs.tab', function() {
+                        if (liveMap) {
+                            setTimeout(() => liveMap.invalidateSize(), 100);
+                        }
+                    });
+                    
+                    document.getElementById('history-tab').addEventListener('shown.bs.tab', function() {
+                        if (map) {
+                            setTimeout(() => map.invalidateSize(), 100);
+                        }
+                    });
+                    
+                    // Live tracking buttons
+                    document.getElementById('startLiveTrack').addEventListener('click', startLiveTracking);
+                    document.getElementById('stopLiveTrack').addEventListener('click', stopLiveTracking);
+                    
+                    // Manual refresh handler
+                    const refreshElement = document.getElementById('refreshIndicator');
+                    if (refreshElement) {
+                        refreshElement.addEventListener('click', manualRefresh);
+                    }
+                    
+                    // Load device location initially
+                    fetchDeviceLocation();
+                }
+            });
+
+            // Initialize history map
+            function initMap() {
+                map = L.map('mapContainer').setView([0, 0], 2);
+                
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                }).addTo(map);
+            }
+
+            // Initialize live tracking map
+            function initLiveMap() {
+                liveMap = L.map('liveMapContainer').setView([0, 0], 2);
+                
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                }).addTo(liveMap);
+            }
+
+            // Start auto-refresh for history view
+            function startAutoRefresh() {
+                // Reset countdown
+                countdown = 30;
+                updateCountdown();
+                
+                // Start countdown timer
+                countdownInterval = setInterval(() => {
+                    countdown--;
+                    updateCountdown();
+                    
+                    if (countdown <= 0) {
+                        fetchDeviceLocations();
+                        countdown = 30;
+                    }
+                }, 1000);
+                
+                // Set refresh interval
+                refreshInterval = setInterval(fetchDeviceLocations, 30000);
+            }
+
+            // Update countdown display
+            function updateCountdown() {
+                const countdownElement = document.getElementById('countdown');
+                if (countdownElement) {
+                    countdownElement.textContent = countdown;
+                }
+            }
+
+            // Manual refresh handler
+            function manualRefresh() {
+                if (!deviceId) return;
+                
+                // Reset countdown
+                countdown = 30;
+                updateCountdown();
+                
+                // Fetch data immediately
+                fetchDeviceLocations();
+            }
+
+            // Fetch device locations for history view
+            function fetchDeviceLocations() {
+                if (!deviceId) return;
+                
+                // Get the selected date
+                const datePicker = document.getElementById('datePicker');
+                const selectedDate = datePicker ? datePicker.value : new Date().toISOString().split('T')[0];
+                
+                fetch(`/api/locations/${deviceId}/date/${selectedDate}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        updateLastUpdated();
+                        if (Array.isArray(data)) {
+                            updateTable(data);
+                            renderLocationsOnMap(data, selectedDate);
+                        } else if (data.message) {
+                            updateTable([]);
+                            renderLocationsOnMap([], selectedDate);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                    });
+            }
+
+            // Update last updated timestamp
+            function updateLastUpdated() {
+                const now = new Date();
+                const lastUpdatedElement = document.getElementById('lastUpdated');
+                if (lastUpdatedElement) {
+                    lastUpdatedElement.textContent = 
+                        now.toLocaleTimeString() + ' ' + now.toLocaleDateString();
+                }
+            }
+
+            // Render location data in table
+            function updateTable(locations) {
+                const tableBody = document.getElementById('locationData');
+                if (!tableBody) return;
+                
+                tableBody.innerHTML = '';
+                
+                if (locations.length === 0) {
+                    tableBody.innerHTML = `<tr><td colspan="3" class="text-center">No location data available</td></tr>`;
+                    return;
+                }
+                
+                locations.forEach(location => {
+                    const date = new Date(location.timestamp);
+                    const row = document.createElement('tr');
+                    
+                    row.innerHTML = `
+                        <td>${date.toLocaleString()}</td>
+                        <td>${location.latitude.toFixed(6)}</td>
+                        <td>${location.longitude.toFixed(6)}</td>
+                    `;
+                    
+                    tableBody.appendChild(row);
+                });
+            }
+
+            // Function to update the map with locations for a specific date
+            function updateMapWithDateLocations(dateString) {
+                if (!deviceId) return;
+                
+                // If no date provided, use today
+                if (!dateString) {
+                    const today = new Date().toISOString().split('T')[0];
+                    dateString = today;
+                }
+                
+                fetch(`/api/locations/${deviceId}/date/${dateString}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (Array.isArray(data)) {
+                            updateTable(data);
+                            renderLocationsOnMap(data, dateString);
+                        } else if (data.message) {
+                            updateTable([]);
+                            renderLocationsOnMap([], dateString);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert(error.message);
+                    });
+            }
+
+            // Function to render locations on the map for a given date
+            function renderLocationsOnMap(locations, dateString) {
+                // Update the label
+                const selectedDateLabel = document.getElementById('selectedDateLabel');
+                if (selectedDateLabel) {
+                    const today = new Date().toISOString().split('T')[0];
+                    if (dateString === today) {
+                        selectedDateLabel.textContent = 'today';
+                    } else {
+                        selectedDateLabel.textContent = dateString;
+                    }
+                }
+                
+                // Update count display
+                document.getElementById('todayCount').textContent = locations.length;
+                
+                // Clear previous markers
+                clearHistoryMap();
+                
+                if (locations.length === 0) {
+                    // Set the map view to a default
+                    map.setView([0, 0], 2);
+                    return;
+                }
+                
+                // Add markers to map
+                const latLngs = [];
+                
+                locations.forEach((loc, index) => {
+                    const latLng = [loc.latitude, loc.longitude];
+                    latLngs.push(latLng);
+                    
+                    const marker = L.marker(latLng, {
+                        icon: L.divIcon({
+                            className: 'map-marker',
+                            html: `<span>${index + 1}</span>`,
+                            iconSize: [24, 24]
+                        })
+                    }).addTo(map);
+                    
+                    marker.bindPopup(`
+                        <b>Location ${index + 1}</b><br>
+                        <b>Time:</b> ${new Date(loc.timestamp).toLocaleString()}<br>
+                        <b>Lat:</b> ${loc.latitude.toFixed(6)}<br>
+                        <b>Lon:</b> ${loc.longitude.toFixed(6)}
+                    `);
+                    
+                    historyMarkers.push(marker);
+                });
+                
+                // Add polyline connecting points
+                historyPolyline = L.polyline(latLngs, {color: '#4a6cfa'}).addTo(map);
+                
+                // Fit map to show all markers
+                map.fitBounds(historyPolyline.getBounds());
+            }
+
+            // Clear all history map elements
+            function clearHistoryMap() {
+                // Remove markers
+                historyMarkers.forEach(marker => map.removeLayer(marker));
+                historyMarkers = [];
+                
+                // Remove polyline
+                if (historyPolyline) {
+                    map.removeLayer(historyPolyline);
+                    historyPolyline = null;
+                }
+            }
+
+            // Start live tracking
+            function startLiveTracking() {
+                if (!deviceId) return;
+                
+                // Request location permission
+                if (!navigator.geolocation) {
+                    alert("Geolocation is not supported by your browser");
+                    return;
+                }
+                
+                // Update UI
+                document.getElementById('startLiveTrack').disabled = true;
+                document.getElementById('stopLiveTrack').disabled = false;
+                
+                // Get initial user location
+                getUserLocation();
+                
+                // Start live tracking interval
+                liveTrackingInterval = setInterval(updateLiveTracking, 30000);
+            }
+
+            // Stop live tracking
+            function stopLiveTracking() {
+                // Update UI
+                document.getElementById('startLiveTrack').disabled = false;
+                document.getElementById('stopLiveTrack').disabled = true;
+                
+                // Clear interval
+                if (liveTrackingInterval) {
+                    clearInterval(liveTrackingInterval);
+                    liveTrackingInterval = null;
+                }
+                
+                // Clear route if exists
+                if (routingControl) {
+                    liveMap.removeControl(routingControl);
+                    routingControl = null;
+                }
+                
+                // Clear markers
+                if (sourceMarker) liveMap.removeLayer(sourceMarker);
+                if (destinationMarker) liveMap.removeLayer(destinationMarker);
+                sourceMarker = null;
+                destinationMarker = null;
+            }
+
+            // Get user's current location
+            function getUserLocation() {
+                navigator.geolocation.getCurrentPosition(
+                    position => {
+                        userLocation = {
+                            latitude: position.coords.latitude,
+                            longitude: position.coords.longitude,
+                            timestamp: new Date()
+                        };
+                        
+                        // Update source coordinates display
+                        document.getElementById('sourceCoords').textContent = 
+                            `${userLocation.latitude.toFixed(6)}, ${userLocation.longitude.toFixed(6)}`;
+                        
+                        // Update map if we have device location
+                        if (deviceLocation) {
+                            updateLiveMap();
+                        }
+                    },
+                    error => {
+                        console.error('Error getting user location:', error);
+                        alert(`Error getting your location: ${error.message}`);
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    }
+                );
+            }
+
+            // Fetch device's latest location
+            function fetchDeviceLocation() {
+                fetch(`/api/locations/${deviceId}/latest`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.latitude) {
+                            deviceLocation = {
+                                latitude: data.latitude,
+                                longitude: data.longitude,
+                                timestamp: data.timestamp
+                            };
+                            
+                            // Update destination coordinates display
+                            document.getElementById('destCoords').textContent = 
+                                `${deviceLocation.latitude.toFixed(6)}, ${deviceLocation.longitude.toFixed(6)}`;
+                            
+                            // Update map if we have user location
+                            if (userLocation) {
+                                updateLiveMap();
+                            }
+                        } else if (data.message) {
+                            document.getElementById('destCoords').textContent = data.message;
+                            deviceLocation = null;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching device location:', error);
+                    });
+            }
+
+            // Update live tracking
+            function updateLiveTracking() {
+                // Refresh user location
+                getUserLocation();
+                
+                // Refresh device location
+                fetchDeviceLocation();
+            }
+
+            // Update live map with source and destination
+            function updateLiveMap() {
+                if (!userLocation || !deviceLocation) return;
+                
+                // Clear previous route
+                if (routingControl) {
+                    liveMap.removeControl(routingControl);
+                    routingControl = null;
+                }
+                
+                // Clear previous markers
+                if (sourceMarker) liveMap.removeLayer(sourceMarker);
+                if (destinationMarker) liveMap.removeLayer(destinationMarker);
+                
+                // Add source marker (user location)
+                sourceMarker = L.marker([userLocation.latitude, userLocation.longitude], {
+                    icon: L.divIcon({
+                        className: 'map-marker',
+                        html: '<i class="fas fa-user" style="font-size: 24px; color: #0d6efd;"></i>',
+                        iconSize: [30, 30]
+                    })
+                }).addTo(liveMap)
+                .bindPopup(`
+                    <b>Your Location</b><br>
+                    <b>Time:</b> ${userLocation.timestamp.toLocaleString()}<br>
+                    <b>Lat:</b> ${userLocation.latitude.toFixed(6)}<br>
+                    <b>Lon:</b> ${userLocation.longitude.toFixed(6)}
+                `);
+                
+                // Add destination marker (device location)
+                destinationMarker = L.marker([deviceLocation.latitude, deviceLocation.longitude], {
+                    icon: L.divIcon({
+                        className: 'map-marker',
+                        html: '<i class="fas fa-car" style="font-size: 24px; color: #198754;"></i>',
+                        iconSize: [30, 30]
+                    })
+                }).addTo(liveMap)
+                .bindPopup(`
+                    <b>Device Location</b><br>
+                    <b>Time:</b> ${new Date(deviceLocation.timestamp).toLocaleString()}<br>
+                    <b>Lat:</b> ${deviceLocation.latitude.toFixed(6)}<br>
+                    <b>Lon:</b> ${deviceLocation.longitude.toFixed(6)}
+                `);
+                
+                // Create route
+                routingControl = L.Routing.control({
+                    waypoints: [
+                        L.latLng(userLocation.latitude, userLocation.longitude),
+                        L.latLng(deviceLocation.latitude, deviceLocation.longitude)
+                    ],
+                    routeWhileDragging: false,
+                    showAlternatives: false,
+                    lineOptions: {
+                        styles: [{color: '#dc3545', weight: 6, opacity: 0.7}]
+                    },
+                    createMarker: function() { return null; } // Disable default markers
+                }).addTo(liveMap);
+                
+                // Calculate distance
+                const distance = calculateDistance(
+                    userLocation.latitude, userLocation.longitude,
+                    deviceLocation.latitude, deviceLocation.longitude
+                );
+                document.getElementById('routeDistance').textContent = 
+                    `${distance.toFixed(2)} km`;
+                
+                // Fit map to show both points
+                const bounds = L.latLngBounds([
+                    [userLocation.latitude, userLocation.longitude],
+                    [deviceLocation.latitude, deviceLocation.longitude]
+                ]);
+                liveMap.fitBounds(bounds, { padding: [50, 50] });
+            }
+
+            // Calculate distance using Haversine formula
+            function calculateDistance(lat1, lon1, lat2, lon2) {
+                const R = 6371; // Earth radius in km
+                const dLat = deg2rad(lat2 - lat1);
+                const dLon = deg2rad(lon2 - lon1);
+                
+                const a = 
+                    Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+                    Math.sin(dLon/2) * Math.sin(dLon/2);
+                    
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+                return R * c;
+            }
+
+            function deg2rad(deg) {
+                return deg * (Math.PI/180);
+            }
+        </script>
+</body>
+</html>
